@@ -22,4 +22,4 @@ Designed for macOS / Linux. Processes are read from a text file `processes.txt` 
 
 ```bash
 # In the project root
-gcc os_project2.c -o os_project2
+gcc os_project.c -o os_project
