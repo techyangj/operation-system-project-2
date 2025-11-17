@@ -1,0 +1,182 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage{geometry}
+\geometry{margin=1in}
+\usepackage{times}
+\usepackage{graphicx}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{float}
+\usepackage{placeins}
+\renewcommand{\textfraction}{0.05}
+\renewcommand{\floatpagefraction}{0.9}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.9}
+\graphicspath{{.}{./}{./figs/}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Operating Systems Project2}
+\lhead{Yangyang Jiang}
+\rfoot{\thepage}
+
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    \vspace*{3cm}
+    {\Huge \textbf{Operating Systems Project2 Report}}\\[1.5cm]
+    {\Large Thread-based Process Simulation and Synchronization}\\[1.5cm]
+    \textbf{Course:} 4320/6320 -- Operating Systems (Fall 2025)\\[0.5cm]
+    \textbf{Student:} Yangyang Jiang\\[0.5cm]
+    \textbf{Github:} \url{https://github.com/techyangj/operation-system-project-2}\\[0.5cm]
+    \vfill
+\end{titlepage}
+
+\section{Introduction}
+
+This project extends Project 1 from CPU scheduling to \textbf{multithreading and synchronization} in C language.
+
+The goals are:
+\begin{itemize}
+    \item Turn each process from \texttt{processes.txt} into a thread and simulate its CPU burst.
+    \item Implement one classic synchronization problem using locks.
+    \item Print clear thread activity messages to understand concurrent behavior.
+\end{itemize}
+
+I chose the \textbf{Dining Philosophers} problem for the synchronization part and implemented both parts in a single C program.
+
+\section{Implementation}
+
+\subsection{Input and Data Structures}
+
+The program reuses the Project 1 input file:
+
+\begin{verbatim}
+PID  Arrival_Time  Burst_Time  Priority
+1    0             5           2
+2    2             3           1
+3    4             2           3
+\end{verbatim}
+
+
+\noindent Each line is stored in a \texttt{Process} structure:
+
+\begin{verbatim}
+typedef struct {
+    int pid;
+    int arrival_time;
+    int burst_time;
+    int priority;
+} Process;
+\end{verbatim}
+
+\subsection{Step 1: Processes as Threads}
+
+The wrapper \texttt{run\_process\_simulation()}:
+
+\begin{enumerate}
+    \item Reads all processes from the file.
+    \item Creates one \texttt{pthread\_t} per process with \texttt{pthread\_create()}.
+    \item Waits for all threads using \texttt{pthread\_join()}.
+\end{enumerate}
+
+This part shows how multiple logical processes can run concurrently as threads, but does not use any locks because the threads do not share data.
+
+\subsection{Step 2.1: Dining Philosophers with Mutexes}
+
+For synchronization, the program implements the Dining Philosophers problem with 5 philosophers and 5 forks.
+
+\paragraph{Model.}
+Each philosopher is a thread. Forks are represented as an array of mutexes:
+
+\begin{verbatim}
+#define NUM_PHILOSOPHERS 5
+pthread_mutex_t forks_mutex[NUM_PHILOSOPHERS];
+\end{verbatim}
+
+Philosopher $i$ (1--5) owns forks $(i-1)$ and $(i \bmod 5)$ in the array.
+
+\paragraph{Thread behavior.}
+Each philosopher repeats the following several times:
+
+\begin{enumerate}
+    \item Print \texttt{[Philosopher i] Started.} (once at the beginning).
+    \item \textbf{Thinking}: print \texttt{Thinking...} and \texttt{usleep()}.
+    \item Print \texttt{Waiting for forks...}.
+    \item Lock two fork mutexes, print which forks are picked up:
+\begin{verbatim}
+[Philosopher 2] Picked up fork 1 and 2
+\end{verbatim}
+    \item Print \texttt{Eating...} and \texttt{usleep()} to simulate eating.
+    \item Unlock the forks and print \texttt{Released forks}.
+\end{enumerate}
+
+These messages match the example in the project handout and clearly show when a philosopher is waiting, acquiring locks, and releasing them.
+
+\paragraph{Deadlock avoidance.}
+If every philosopher always picked up the left fork first and then the right fork, the system could deadlock. To avoid this, the program uses a simple ordering rule:
+
+\begin{itemize}
+    \item For forks with indices \texttt{left} and \texttt{right}, each philosopher always locks \texttt{min(left,right)} first and \texttt{max(left,right)} second.
+\end{itemize}
+
+This global ordering removes the circular-wait condition, so all philosophers eventually get both forks and finish eating.
+
+\subsection{Compilation}
+
+The code is compiled and run from the macOS terminal:
+
+\begin{verbatim}
+gcc os_project2.c -o os_project2
+\end{verbatim}
+
+\section{Results}
+
+\subsection{Process Thread Simulation}
+
+
+A screenshot of this part is included as Figure~\ref{fig:step1}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{step1_process_threads.png}
+    \caption{Process threads simulating CPU bursts using \texttt{sleep()}.}
+    \label{fig:step1}
+\end{figure}
+\FloatBarrier
+
+\subsection{Dining Philosophers Activity}
+
+A screenshot of the philosopher activity is shown in Figure~\ref{fig:philosophers}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.3\linewidth]{step2_philosophers.png} % 改成 60% 宽
+    \caption{Thread activity for the Dining Philosophers synchronization.}
+    \label{fig:philosophers}
+\end{figure}
+
+
+
+\section{Conclusion}
+
+This project connects two important OS topics: \textbf{process scheduling} (from Project 1) and \textbf{thread-level concurrency}.
+
+In Step 1, reading processes.txt and turning each entry into a thread shows a simple way to simulate process execution. Although the simulation uses only sleep(), it reveals that threads can start and finish in an interleaved order and that execution is non-deterministic.
+
+In Step 2.1, the Dining Philosophers implementation demonstrates how to use mutexes to protect shared resources and how an ordering strategy can avoid deadlock. The printed activity lines such as ``Waiting for forks'', ``Picked up fork X and Y'', and ``Released forks'' make the behavior of the synchronization algorithm easy to observe and debug.
+
+Overall, this project helped me practice:
+
+\begin{itemize}
+    \item Creating and joining threads with \texttt{pthread}.
+    \item Using mutexes to guard shared data.
+    \item Designing a simple but effective deadlock-avoidance scheme.
+\end{itemize}
+
+
+\end{document}
